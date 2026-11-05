@@ -30,13 +30,11 @@ js/
   constants/roles.js    cliente | profesional | administrador
   components/
     navbar.js           Menú según rol
-    simpleCrud.js       ABM genérico (tabla + form)
   utils/dom.js          Helpers (escape, alertas, formularios)
   views/
-    public/             home, login, register, notFound
+    public/             home, servicios, equipo, login, register, notFound
     cliente/            reservar, misTurnos
-    profesional/        agenda
-    admin/              dashboard, usuarios, tratamientos, gabinetes, turnos
+    admin/              dashboard, generarAgenda, profesionales, usuarios
 ```
 
 Cada vista exporta `{ title, render(root) }`. Para agregar una pantalla: crear el archivo en `js/views/` y registrarla en `routes` dentro de `js/router.js`.
@@ -49,7 +47,7 @@ El contrato con la API de Turnos está en [`API-frontend.md`](API-frontend.md).
 |---|---|---|
 | `#/` | público | — |
 | `#/servicios` | público | `GET /api/servicios` |
-| `#/equipo` | público | `GET /api/profesionales`, `/api/profesionalServicio`, `/api/servicios` |
+| `#/equipo` | público | `GET /api/profesionales` (cada uno trae sus `servicios`) |
 | `#/reservar` | público (al confirmar pide login y vuelve) | `GET /api/turnos`, `POST /api/reservas` |
 | `#/login`, `#/registro` | solo sin sesión | Usuarios: `POST /sesiones`, `POST /usuarios` |
 | `#/mis-turnos` | con sesión (cualquier rol) | `GET /api/reservas`, `PATCH` y `DELETE /api/reservas/:id` |

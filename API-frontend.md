@@ -30,7 +30,7 @@ El token trae (se puede leer decodificándolo, sin verificar):
 
 ```json
 {
-  "id": "6ae24769d78341145aef8047",
+  "id": "665f1c2a9b3e4d0012a7c3f1",
   "rol": "administrador",
   "exp": 1793562282
 }
@@ -88,15 +88,14 @@ Se puede mostrar `mensaje` directamente al usuario. `error` es para depurar.
   "apellido": "Sosa",
   "especialidad": "Tratamientos faciales y corporales",
   "activo": true,
-  "usuario_id": "6ae761442b19072bbffa20c3"
+  "usuario_id": "665f1d7b2c8a4e0019b5d2e4",
+  "servicios": [
+    { "id": 2, "nombre": "Masaje descontracturante", "categoria": "Tratamiento corporal", "duracion": 60, "precio": 35000 }
+  ]
 }
 ```
 
-**Profesional–Servicio** (qué servicios hace cada profesional)
-
-```json
-{ "id": 12, "profesional_id": 7, "servicio_id": 2, "activo": true }
-```
+`servicios` trae los servicios activos que hace el profesional, ordenados por `id`.
 
 **Turno** (una franja horaria de un profesional)
 
@@ -125,8 +124,7 @@ Se puede mostrar `mensaje` directamente al usuario. `error` es para depurar.
 | Método | Ruta | Requiere token | Para qué |
 |---|---|---|---|
 | `GET` | `/api/servicios` | No | Catálogo de servicios |
-| `GET` | `/api/profesionales` | No | Lista de profesionales |
-| `GET` | `/api/profesionalServicio` | No | Qué servicios hace cada profesional |
+| `GET` | `/api/profesionales` | No | Profesionales con los servicios que hacen (con filtro) |
 | `GET` | `/api/turnos` | No | Franjas disponibles (con filtros) |
 | `GET` | `/api/reservas` | Sí | Mis reservas |
 | `POST` | `/api/reservas` | Sí | Reservar una franja |
@@ -147,19 +145,20 @@ Devuelve los servicios activos.
 
 ### `GET /api/profesionales`
 
-Devuelve los profesionales activos.
+Devuelve los profesionales activos, cada uno con los servicios que hace (`servicios`). Filtro opcional:
+
+| Parámetro | Ejemplo | Filtra por |
+|---|---|---|
+| `servicio_id` | `2` | Solo los profesionales que hacen ese servicio |
 
 ```
-200 → [ Profesional, ... ]
+GET /api/profesionales?servicio_id=2
+
+200 → [ Profesional, ... ]   (lista vacía si nadie hace ese servicio)
+400 → servicio_id con formato incorrecto
 ```
 
-### `GET /api/profesionalServicio`
-
-Devuelve las relaciones activas entre profesionales y servicios. Trae **solo IDs**: para mostrar nombres, cruzar con `/api/servicios` y `/api/profesionales`.
-
-```
-200 → [ { "id": 12, "profesional_id": 7, "servicio_id": 2, "activo": true }, ... ]
-```
+> La ruta `/api/profesionalServicio` ya no existe: usar esta.
 
 ### `GET /api/turnos`
 
@@ -194,7 +193,7 @@ Devuelve las reservas vigentes del usuario del token: desde hoy, ordenadas por f
     "id": 1244,
     "profesional_id": 10,
     "servicio_id": 13,
-    "usuario_id": "6ae24769d78341145aef8047",
+    "usuario_id": "665f1c2a9b3e4d0012a7c3f1",
     "fecha": "2026-11-30",
     "hora_inicio": "17:00:00",
     "hora_fin": "18:00:00",
@@ -236,7 +235,7 @@ Reserva una franja para un servicio. El usuario se toma del token.
 
 | Código | Significado | Qué hacer |
 |---|---|---|
-| `201` | Reservado. Devuelve `{ mensaje, reserva }`, donde `reserva` es el Turno ya reservado. | Mostrar confirmación. |
+| `201` | Reservado. Devuelve el Turno ya reservado. | Mostrar confirmación. |
 | `400` | Datos con formato incorrecto. | Error de programación: revisar el body. |
 | `401` | Sin sesión. | Ir al login. |
 | `404` | La franja no existe, ya no está disponible o es de una fecha pasada. | Avisar y recargar las franjas. |
@@ -255,7 +254,7 @@ Cambia una reserva del usuario a **otra franja del mismo profesional**. `:id` es
 
 | Código | Significado |
 |---|---|
-| `200` | Modificada. Devuelve `{ mensaje, reserva }` con la **nueva** franja. La anterior queda libre. |
+| `200` | Modificada. Devuelve el Turno de la **nueva** franja. La anterior queda libre. |
 | `400` | Formato incorrecto, o la nueva franja es la misma que la actual. |
 | `401` | Sin sesión. |
 | `404` | La reserva no existe o no es del usuario. |
@@ -269,7 +268,7 @@ Cancela una reserva del usuario. La franja vuelve a quedar disponible.
 
 | Código | Significado |
 |---|---|
-| `200` | Cancelada. Devuelve `{ mensaje, turno }`. |
+| `200` | Cancelada. Devuelve el Turno liberado (`estado: "disponible"`). |
 | `400` | `:id` con formato incorrecto. |
 | `401` | Sin sesión. |
 | `404` | La reserva no existe o no es del usuario. |
@@ -289,7 +288,7 @@ Genera las franjas disponibles de **un día** para los profesionales que hacen u
 
 | Código | Significado |
 |---|---|
-| `201` | Generadas. Devuelve `{ mensaje, turnos: [Turno, ...] }`. |
+| `201` | Generadas. Devuelve `[Turno, ...]` con las franjas generadas. |
 | `200` | No había nada para generar (ya existían, o ningún profesional hace ese servicio). Devuelve `{ mensaje }`. |
 | `400` | Formato incorrecto, o la fecha cae sábado o domingo. |
 | `401` / `403` | Sin sesión / no es administrador. |
@@ -303,14 +302,14 @@ Da de alta como profesional a un usuario que ya existe en la API de Usuarios con
 
 ```json
 {
-  "usuario_id": "6ae761442b19072bbffa20c3",
+  "usuario_id": "665f1d7b2c8a4e0019b5d2e4",
   "especialidad": "Tratamientos faciales"
 }
 ```
 
 | Código | Significado |
 |---|---|
-| `201` | Creado. Devuelve `{ mensaje, profesional }`. |
+| `201` | Creado. Devuelve el Profesional creado. |
 | `400` | Faltan datos. |
 | `401` / `403` | Sin sesión / no es administrador. |
 | `404` | El usuario no existe en la API de Usuarios. |
@@ -329,7 +328,7 @@ Da de alta como profesional a un usuario que ya existe en la API de Usuarios con
 
 **Equipo**
 - Lista de profesionales con su especialidad (`GET /api/profesionales`).
-- Opcional: mostrar qué servicios hace cada uno (cruzar con `GET /api/profesionalServicio`).
+- Opcional: mostrar qué servicios hace cada uno (vienen en `servicios` de cada profesional).
 
 ### Para usuarios con sesión
 
@@ -338,7 +337,7 @@ Da de alta como profesional a un usuario que ya existe en la API de Usuarios con
 ```
 1. Elegir servicio            → GET /api/servicios
 2. (Opcional) elegir profesional
-                              → GET /api/profesionalServicio + GET /api/profesionales
+                              → GET /api/profesionales?servicio_id=X
                                 (solo los que hacen ese servicio)
 3. Elegir día                 → calendario de lunes a viernes, desde hoy
 4. Elegir horario             → GET /api/turnos?servicio_id=X&fecha=Y[&profesional_id=Z]
@@ -385,7 +384,6 @@ Da de alta como profesional a un usuario que ya existe en la API de Usuarios con
 | No hay rutas para editar o desactivar servicios y profesionales, ni para asignar servicios a profesionales. | Esas tareas se hacen hoy directamente en la base de datos. |
 | Las respuestas de `/api/turnos` traen solo `profesional_id` y `servicio_id` (`/api/reservas` sí incluye los nombres). | Para mostrar nombres en la selección de horarios, cruzar con `/api/profesionales` y `/api/servicios` (se pueden pedir una vez y guardar en memoria). |
 | "Mis turnos" muestra solo las reservas desde hoy. | No hay historial de turnos pasados. |
-
 
 # API de usuarios: guía para el frontend
 
@@ -440,7 +438,7 @@ Además, cualquier ruta que no exista devuelve `404` con el texto plano `Ruta in
 
 ## Modelo de usuario
 
-Así viene un usuario dentro de `payload`:
+Así viene un usuario en las respuestas:
 
 ```json
 {
@@ -563,7 +561,7 @@ Disponible para cualquier rol.
 
 | Status | Body | Cuándo |
 |---|---|---|
-| `200` | `{ "message": "Usuario encontrado", "payload": { ...usuario } }` | El usuario existe y está activo. |
+| `200` | `{ ...usuario }` | El usuario existe y está activo. |
 | `401` | Texto plano | Token faltante, inválido o vencido. |
 | `404` | `{ "message": "Usuario no encontrado" }` | El usuario fue desactivado después de iniciar sesión. Conviene tratarlo como un logout. |
 
@@ -571,16 +569,13 @@ Disponible para cualquier rol.
 
 ```json
 {
-  "message": "Usuario encontrado",
-  "payload": {
-    "_id": "6ae761442b19072bbffa20c4",
-    "nombre": "Sofía",
-    "apellido": "Ramírez",
-    "email": "sofia.ramirez@example.com",
-    "rol": "cliente",
-    "activo": true,
-    "fecha_registro": "2026-11-01T14:00:00.000Z"
-  }
+  "_id": "6ae761442b19072bbffa20c4",
+  "nombre": "Sofía",
+  "apellido": "Ramírez",
+  "email": "sofia.ramirez@example.com",
+  "rol": "cliente",
+  "activo": true,
+  "fecha_registro": "2026-11-01T14:00:00.000Z"
 }
 ```
 
@@ -594,20 +589,17 @@ Solo administradores. Devuelve todos los usuarios activos, de cualquier rol. No 
 
 | Status | Body | Cuándo |
 |---|---|---|
-| `200` | `{ "message": "Lista de usuarios", "payload": [ ...usuarios ] }` | Siempre que el token sea de un administrador. Si no hay usuarios, `payload` es `[]`. |
+| `200` | `[ ...usuarios ]` | Siempre que el token sea de un administrador. Si no hay usuarios, devuelve `[]`. |
 | `401` | Texto plano | Token faltante, inválido o vencido. |
 | `403` | `{ "message": "Acceso denegado" }` | El token no es de un administrador. |
 
 **Ejemplo de respuesta `200`:**
 
 ```json
-{
-  "message": "Lista de usuarios",
-  "payload": [
-    { "_id": "6ae761442b19072bbffa20c2", "nombre": "Laura", "apellido": "Méndez", "email": "laura.mendez@example.com", "rol": "administrador", "activo": true, "fecha_registro": "2026-11-01T14:00:00.000Z" },
-    { "_id": "6ae761442b19072bbffa20c3", "nombre": "Martín", "apellido": "Sosa", "email": "martin.sosa@example.com", "rol": "profesional", "activo": true, "fecha_registro": "2026-11-01T14:00:00.000Z" }
-  ]
-}
+[
+  { "_id": "6ae761442b19072bbffa20c2", "nombre": "Laura", "apellido": "Méndez", "email": "laura.mendez@example.com", "rol": "administrador", "activo": true, "fecha_registro": "2026-11-01T14:00:00.000Z" },
+  { "_id": "6ae761442b19072bbffa20c3", "nombre": "Martín", "apellido": "Sosa", "email": "martin.sosa@example.com", "rol": "profesional", "activo": true, "fecha_registro": "2026-11-01T14:00:00.000Z" }
+]
 ```
 
 ## `GET /usuarios/:id`: ver un usuario
@@ -620,7 +612,7 @@ Solo administradores. `:id` es el `_id` del usuario.
 
 | Status | Body | Cuándo |
 |---|---|---|
-| `200` | `{ "message": "Usuario encontrado", "payload": { ...usuario } }` | El usuario existe y está activo. |
+| `200` | `{ ...usuario }` | El usuario existe y está activo. |
 | `401` | Texto plano | Token faltante, inválido o vencido. |
 | `403` | `{ "message": "Acceso denegado" }` | El token no es de un administrador. |
 | `404` | `{ "message": "Usuario no encontrado" }` | No existe, está desactivado o el id no tiene un formato válido. |
@@ -635,7 +627,7 @@ Solo administradores. Es una **baja lógica**: el usuario no se borra, queda con
 
 | Status | Body | Cuándo |
 |---|---|---|
-| `200` | `{ "message": "Usuario desactivado", "payload": { ...usuario, "activo": false } }` | El usuario se desactivó. |
+| `200` | `{ ...usuario, "activo": false }` | El usuario se desactivó. |
 | `401` | Texto plano | Token faltante, inválido o vencido. |
 | `403` | `{ "message": "Acceso denegado" }` | El token no es de un administrador. |
 | `404` | `{ "message": "Usuario no encontrado" }` | No existe o ya estaba desactivado. |
@@ -660,7 +652,7 @@ Solo administradores. El usuario se crea con una contraseña temporal generada p
 
 | Status | Body | Cuándo |
 |---|---|---|
-| `201` | `{ "message": "Usuario creado", "payload": { ...usuario } }` | Usuario creado. |
+| `201` | `{ ...usuario }` | Usuario creado. |
 | `400` | `{ "message": "Datos inválidos", "error": "..." }` | Falta algún campo o `rol` no es válido. |
 | `401` | Texto plano | Token faltante, inválido o vencido. |
 | `403` | `{ "message": "Acceso denegado" }` | El token no es de un administrador. |
@@ -673,4 +665,3 @@ Solo administradores. El usuario se crea con una contraseña temporal generada p
 ## Rutas que no son para el frontend
 
 `GET /interno/usuarios/:id` es solo para comunicación entre servicios (la usa la API de turnos). Se autentica con una clave interna que nunca debe estar en el frontend.
-

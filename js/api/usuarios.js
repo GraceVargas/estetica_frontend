@@ -2,7 +2,7 @@ import { API_USUARIOS_URL } from '../config.js';
 import { createClient } from './http.js';
 
 // API de Usuarios. Rutas y contratos según API-frontend.md (sección "API de usuarios").
-// Los usuarios traen el id en `_id`. Las respuestas con datos vienen como { message, payload }.
+// Los usuarios traen el id en `_id`. Las respuestas traen el usuario (o la lista) directamente.
 const api = createClient(API_USUARIOS_URL);
 
 // ---------- Sesión ----------
@@ -29,7 +29,7 @@ export function register({ nombre, apellido, email, password }) {
 /** GET /usuarios/me -> usuario logueado */
 export async function getMe() {
   const data = await api.get('/usuarios/me');
-  return data?.payload ?? null;
+  return data ?? null;
 }
 
 // ---------- Administrador ----------
@@ -37,13 +37,13 @@ export async function getMe() {
 /** GET /usuarios -> usuarios activos de cualquier rol (sin filtros: se filtra en el front) */
 export async function listarUsuarios() {
   const data = await api.get('/usuarios');
-  return data?.payload ?? [];
+  return Array.isArray(data) ? data : [];
 }
 
 /** GET /usuarios/:id */
 export async function obtenerUsuario(id) {
   const data = await api.get(`/usuarios/${encodeURIComponent(id)}`);
-  return data?.payload ?? null;
+  return data ?? null;
 }
 
 /** DELETE /usuarios/:id -> baja lógica (activo: false). No se puede reactivar. */
@@ -59,7 +59,7 @@ export async function crearUsuario({ nombre, apellido, email, rol }) {
     email: email.trim(),
     rol,
   });
-  return data?.payload ?? null;
+  return data ?? null;
 }
 
 /** Extrae el token de la respuesta de login/registro ({ token }). */

@@ -11,14 +11,12 @@ export function getServicios() {
   return api.get('/api/servicios', { auth: false });
 }
 
-/** GET /api/profesionales -> [Profesional] (activos) */
-export function getProfesionales() {
-  return api.get('/api/profesionales', { auth: false });
-}
-
-/** GET /api/profesionalServicio -> [{ id, profesional_id, servicio_id, activo }] */
-export function getProfesionalServicio() {
-  return api.get('/api/profesionalServicio', { auth: false });
+/**
+ * GET /api/profesionales[?servicio_id] -> [Profesional] activos, cada uno con
+ * `servicios: [{ id, nombre, categoria, duracion, precio }]` (los que hace).
+ */
+export function getProfesionales({ servicio_id } = {}) {
+  return api.get('/api/profesionales', { auth: false, query: { servicio_id } });
 }
 
 /**
@@ -36,29 +34,29 @@ export function getMisReservas() {
   return api.get('/api/reservas');
 }
 
-/** POST /api/reservas { turno_id, servicio_id } -> 201 { mensaje, reserva } */
+/** POST /api/reservas { turno_id, servicio_id } -> 201 Turno reservado | 404 | 409 | 422 */
 export function crearReserva(turnoId, servicioId) {
   return api.post('/api/reservas', { turno_id: Number(turnoId), servicio_id: Number(servicioId) });
 }
 
-/** PATCH /api/reservas/:id { nuevo_turno_id } -> 200 { mensaje, reserva } */
+/** PATCH /api/reservas/:id { nuevo_turno_id } -> 200 Turno de la nueva franja */
 export function modificarReserva(reservaId, nuevoTurnoId) {
   return api.patch(`/api/reservas/${Number(reservaId)}`, { nuevo_turno_id: Number(nuevoTurnoId) });
 }
 
-/** DELETE /api/reservas/:id -> 200 { mensaje, turno } */
+/** DELETE /api/reservas/:id -> 200 Turno liberado (estado "disponible") */
 export function cancelarReserva(reservaId) {
   return api.del(`/api/reservas/${Number(reservaId)}`);
 }
 
 // ---------- Administrador ----------
 
-/** POST /api/turnos/generar { fecha, servicio_id } -> 201 { mensaje, turnos } | 200 { mensaje } */
+/** POST /api/turnos/generar { fecha, servicio_id } -> 201 [Turno] generados | 200 { mensaje } (nada nuevo) */
 export function generarTurnos(fecha, servicioId) {
   return api.post('/api/turnos/generar', { fecha, servicio_id: Number(servicioId) });
 }
 
-/** POST /api/profesionales { usuario_id, especialidad } -> 201 { mensaje, profesional } */
+/** POST /api/profesionales { usuario_id, especialidad } -> 201 Profesional creado */
 export function crearProfesional({ usuario_id, especialidad }) {
   return api.post('/api/profesionales', { usuario_id, especialidad });
 }
@@ -69,14 +67,16 @@ export function crearProfesional({ usuario_id, especialidad }) {
 // (las respuestas de /api/turnos traen solo IDs).
 let catalogoCache = null;
 
-/** Devuelve { servicios, profesionales, relaciones } cacheados en memoria. */
+/**
+ * Devuelve { servicios, profesionales } cacheados en memoria.
+ * Cada profesional trae `servicios` (los que hace).
+ */
 export async function getCatalogo() {
   if (!catalogoCache) {
-    catalogoCache = Promise.all([getServicios(), getProfesionales(), getProfesionalServicio()])
-      .then(([servicios, profesionales, relaciones]) => ({
+    catalogoCache = Promise.all([getServicios(), getProfesionales()])
+      .then(([servicios, profesionales]) => ({
         servicios: servicios ?? [],
-        profesionales: profesionales ?? [],
-        relaciones: relaciones ?? [],
+        profesionales: (profesionales ?? []).map((p) => ({ ...p, servicios: p.servicios ?? [] })),
       }))
       .catch((err) => {
         catalogoCache = null;

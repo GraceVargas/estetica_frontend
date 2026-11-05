@@ -73,7 +73,8 @@ export default {
           for (const s of servicios) {
             try {
               const res = await generarTurnos(fecha, s.id);
-              total += Array.isArray(res?.turnos) ? res.turnos.length : 0;
+              // 201 -> [Turno] generados; 200 -> { mensaje } (no había nada nuevo)
+              total += Array.isArray(res) ? res.length : 0;
             } catch (err) {
               if (err.status === 401 || err.status === 403) throw err;
               errores.push(`${formatDia(fecha)} · ${s.nombre}: ${err.message}`);

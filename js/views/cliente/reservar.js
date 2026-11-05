@@ -9,9 +9,10 @@ import {
 // filtros (servicio / profesional / día, todos opcionales) -> grilla día × horario -> confirmar.
 // Si no hay sesión al confirmar, se guarda la selección, se va al login y se vuelve acá.
 //
-// IMPORTANTE: hoy GET /api/turnos ignora los filtros (fecha, profesional_id, servicio_id)
-// y devuelve siempre todas las franjas, incluso de días pasados. Por eso se piden todas
-// una sola vez y se filtra todo en el frontend.
+// Los filtros se mandan a GET /api/turnos (servicio_id, profesional_id, fecha). Sin fecha,
+// la API devuelve todos los días desde hoy y la grilla muestra la semana elegida.
+// Además se vuelve a filtrar en el frontend por las dudas, y se ocultan las franjas de hoy
+// que ya pasaron (la API las incluye).
 
 const PENDIENTE_KEY = 'nb_reserva_pendiente';
 const HORAS_DEFAULT = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'];
@@ -74,14 +75,14 @@ const view = {
     } catch (err) {
       return showAlert(body, err.message);
     }
-    const { servicios, profesionales, relaciones } = catalogo;
+    const { servicios, profesionales } = catalogo;
     const servicioPorId = new Map(servicios.map((s) => [s.id, s]));
     const profesionalPorId = new Map(profesionales.map((p) => [p.id, p]));
-    const relActivas = relaciones.filter((r) => r.activo !== false);
+    // Cada profesional trae `servicios` (los que hace)
     const profesHacen = (servicioId) =>
-      new Set(relActivas.filter((r) => r.servicio_id === servicioId).map((r) => r.profesional_id));
+      new Set(profesionales.filter((p) => p.servicios.some((s) => s.id === servicioId)).map((p) => p.id));
     const serviciosDe = (profesionalId) =>
-      new Set(relActivas.filter((r) => r.profesional_id === profesionalId).map((r) => r.servicio_id));
+      new Set((profesionalPorId.get(profesionalId)?.servicios ?? []).map((s) => s.id));
 
     const pendiente = tomarPendiente();
     const params = queryParams();
@@ -91,8 +92,9 @@ const view = {
       fecha: pendiente?.fecha ?? '', // vacío = semana completa
       semana: pendiente?.semana ?? semanaActual(),
       turnoId: pendiente?.turnoId ?? null,
-      todos: [], // todas las franjas que devuelve la API
+      todos: [], // franjas que devolvió la API para los filtros actuales
     };
+    let pedidoActual = 0; // para descartar respuestas viejas si el usuario cambia rápido los filtros
 
     body.innerHTML = `
       <div id="reserva-msg"></div>
@@ -209,6 +211,7 @@ const view = {
 
       if (state.fecha && !esDiaHabil(state.fecha)) {
         horarios.innerHTML = '<p class="muted">Ese día no atendemos. Elegí un día de lunes a viernes.</p>';
+        // (cargarTurnos no consulta la API para sábados y domingos)
         actualizarResumen();
         return;
       }
@@ -289,9 +292,20 @@ const view = {
     }
 
     async function cargarTurnos() {
+      const pedido = ++pedidoActual;
+      if (state.fecha && !esDiaHabil(state.fecha)) {
+        state.todos = [];
+        pintarGrilla();
+        return true;
+      }
       horarios.innerHTML = loader('Buscando horarios...');
       try {
-        const lista = (await turnosApi.getTurnosDisponibles()) ?? [];
+        const lista = (await turnosApi.getTurnosDisponibles({
+          servicio_id: state.servicioId ?? undefined,
+          profesional_id: state.profesionalId ?? undefined,
+          fecha: state.fecha || undefined,
+        })) ?? [];
+        if (pedido !== pedidoActual) return false; // llegó una respuesta más nueva
         // Solo franjas libres, futuras, de profesionales activos y en días hábiles
         state.todos = lista.filter(
           (t) =>
@@ -302,6 +316,7 @@ const view = {
             !yaPaso({ ...t, fecha: diaDe(t) })
         );
       } catch (err) {
+        if (pedido !== pedidoActual) return false;
         state.todos = [];
         showAlert(horarios, err.message);
         return false;
@@ -337,25 +352,25 @@ const view = {
     selServicio.addEventListener('change', () => {
       state.servicioId = Number(selServicio.value) || null;
       pintarFiltros();
-      pintarGrilla();
+      cargarTurnos();
     });
 
     selProfesional.addEventListener('change', () => {
       state.profesionalId = Number(selProfesional.value) || null;
       pintarFiltros();
-      pintarGrilla();
+      cargarTurnos();
     });
 
     inpFecha.addEventListener('change', () => {
       state.fecha = inpFecha.value;
       if (state.fecha) state.semana = lunesDe(state.fecha);
-      pintarGrilla();
+      cargarTurnos();
     });
 
     btnVerSemana.addEventListener('click', () => {
       state.fecha = '';
       inpFecha.value = '';
-      pintarGrilla();
+      cargarTurnos();
     });
 
     btnAnt.addEventListener('click', () => {
@@ -396,14 +411,17 @@ const view = {
       }
 
       try {
-        const res = await withLoading(btnConfirmar, () => turnosApi.crearReserva(turno.id, state.servicioId));
-        mostrarConfirmacion(res?.reserva ?? turno);
+        // 201 -> devuelve el Turno ya reservado
+        const reservado = await withLoading(btnConfirmar, () => turnosApi.crearReserva(turno.id, state.servicioId));
+        mostrarConfirmacion(reservado?.id ? reservado : { ...turno, servicio_id: state.servicioId });
       } catch (err) {
-        if (err.status === 404 || err.status === 409) {
-          const texto = err.status === 409
-            ? 'Ese horario acaba de ser tomado. Elegí otro.'
-            : 'Ese horario ya no está disponible. Elegí otro.';
-          showAlert(msg, texto);
+        if (err.status === 404 || err.status === 409 || err.status === 422) {
+          const textos = {
+            404: 'Ese horario ya no está disponible. Elegí otro.',
+            409: 'Ese horario acaba de ser tomado. Elegí otro.',
+            422: 'Ese profesional no realiza el servicio elegido. Elegí otro horario.',
+          };
+          showAlert(msg, textos[err.status]);
           state.turnoId = null;
           cargarTurnos();
         } else if (err.status !== 401) {

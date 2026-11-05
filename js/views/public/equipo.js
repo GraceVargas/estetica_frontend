@@ -1,8 +1,7 @@
 import { getCatalogo } from '../../api/turnos.js';
 import { esc, loader, showAlert, nombreCompleto } from '../../utils/dom.js';
 
-// Equipo: GET /api/profesionales, cruzado con /api/profesionalServicio y /api/servicios
-// para mostrar qué servicios hace cada profesional.
+// Equipo: GET /api/profesionales. Cada profesional ya trae `servicios` (los que hace).
 
 export default {
   title: 'Equipo',
@@ -14,8 +13,7 @@ export default {
     const list = root.querySelector('#equipo-list');
 
     try {
-      const { servicios, profesionales, relaciones } = await getCatalogo();
-      const servicioPorId = new Map(servicios.map((s) => [s.id, s]));
+      const { profesionales } = await getCatalogo();
 
       if (!profesionales.length) {
         list.innerHTML = '<p class="muted">Todavía no hay profesionales cargados.</p>';
@@ -26,10 +24,7 @@ export default {
         <div class="features">
           ${profesionales
             .map((p) => {
-              const hace = relaciones
-                .filter((r) => r.profesional_id === p.id)
-                .map((r) => servicioPorId.get(r.servicio_id))
-                .filter(Boolean);
+              const hace = p.servicios;
               return `
               <article class="card">
                 <h3>${esc(nombreCompleto(p))}</h3>
